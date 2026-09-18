@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LocateTrade</title>
-  <!-- Supabase JS SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -15,7 +14,6 @@
       --subtext: #a1a1aa;
       --border: #27272a;
       --green: #22c55e;
-      --red: #ef4444;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
     body { background: var(--bg); color: var(--text); padding: 15px; padding-bottom: 80px; }
@@ -24,7 +22,7 @@
     .lang-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); padding: 5px 10px; border-radius: 6px; }
 
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-    input, textarea, select { width: 100%; padding: 10px; background: #09090b; border: 1px solid var(--border); border-radius: 8px; color: #fff; margin-bottom: 10px; }
+    input, textarea { width: 100%; padding: 10px; background: #09090b; border: 1px solid var(--border); border-radius: 8px; color: #fff; margin-bottom: 10px; }
     button { width: 100%; background: var(--accent); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; }
     button.btn-alt { background: transparent; border: 1px solid var(--border); margin-top: 5px; }
 
@@ -34,11 +32,16 @@
     .hidden { display: none; }
     .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); display: flex; border-top: 1px solid var(--border); }
     .nav button { flex: 1; border-radius: 0; background: transparent; padding: 15px 5px; font-size: 12px; }
+
+    /* ЧАТ */
+    .chat-box { height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; border: 1px solid var(--border); padding: 10px; border-radius: 8px; background: #09090b; }
+    .msg { max-width: 80%; padding: 8px 12px; border-radius: 10px; font-size: 14px; word-break: break-word; }
+    .msg-my { align-self: flex-end; background: var(--accent); color: #fff; }
+    .msg-their { align-self: flex-start; background: var(--card); border: 1px solid var(--border); color: #fff; }
   </style>
 </head>
 <body>
 
-  <!-- ХЕДЕР ТА ЗМІНА МОВИ -->
   <div class="header">
     <h2>LocateTrade</h2>
     <button class="lang-btn" onclick="toggleLang()" id="langBtn">RU / UKR</button>
@@ -49,12 +52,12 @@
     <h3 id="authTitle">Вход / Авторизация</h3>
     <input type="email" id="authEmail" placeholder="Email">
     <input type="password" id="authPass" placeholder="Пароль">
-    <input type="text" id="authName" placeholder="Имя / Ім'я (для регистрации)">
+    <input type="text" id="authName" placeholder="Имя / Ім'я">
     <button onclick="handleLogin()" id="btnLoginBtn">Войти</button>
     <button class="btn-alt" onclick="handleRegister()" id="btnRegBtn">Зарегистрироваться</button>
   </div>
 
-  <!-- ПРОФІЛЬ ТА БАЛАНС -->
+  <!-- ПРОФІЛЬ -->
   <div id="profileSection" class="card hidden">
     <div class="balance-info">
       <span>Баланс: <strong id="userBalance" class="price">0</strong> UAH</span>
@@ -71,85 +74,72 @@
     <textarea id="pDescRu" placeholder="Описание (RU)"></textarea>
     <textarea id="pDescUk" placeholder="Опис (UKR)"></textarea>
     <input type="number" id="pPrice" placeholder="Цена / Ціна (UAH)">
-    <input type="text" id="pCategory" placeholder="Категория / Категорія">
     <button onclick="submitListing()" id="btnSubmitListing">Опубликовать</button>
   </div>
 
-  <!-- СПИСОК ОГОЛОШЕНЬ -->
+  <!-- ЛЕНТА -->
   <div id="feedSection">
     <h3 id="feedTitle">Объявления рядом</h3>
     <div id="listingsContainer">Загрузка...</div>
   </div>
 
-  <!-- НАВІГАЦІЯ ПАНЕЛЬ -->
+  <!-- СПИСОК ЧАТІВ ТА ВІКНО ЧАТУ -->
+  <div id="chatsSection" class="hidden">
+    <div id="chatList" class="card">
+      <h3>Мои чаты / Мої чати</h3>
+      <div id="chatsContainer">Загрузка...</div>
+    </div>
+
+    <div id="activeChat" class="card hidden">
+      <button class="btn-alt" onclick="closeChat()" style="margin-bottom:10px;">← Назад</button>
+      <div class="chat-box" id="messagesBox"></div>
+      <div style="display:flex; gap:5px;">
+        <input type="text" id="msgInput" placeholder="Сообщение..." style="margin:0;">
+        <button onclick="sendMessage()" style="width:auto; padding:0 20px;">></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- НАВІГАЦІЯ -->
   <div class="nav">
-    <button onclick="showTab('feed')" id="navFeed">Лента</button>
-    <button onclick="showTab('create')" id="navCreate">+ Подать</button>
-    <button onclick="showTab('profile')" id="navProfile">Кабинет</button>
+    <button onclick="showTab('feed')">Лента</button>
+    <button onclick="showTab('create')">+ Подать</button>
+    <button onclick="showTab('chats')">Чаты</button>
+    <button onclick="showTab('profile')">Кабинет</button>
   </div>
 
   <script>
-    // ІНІЦІАЛІЗАЦІЯ SUPABASE
     const SUPABASE_URL = 'https://tjvdbffdkcteuqlrnfvy.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_veSPx-T_yIOUKgUqfaObtQ_kWCa8vIC';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    let currentLang = 'ru'; // Перемикач мови (ru / uk)
+    let currentLang = 'ru';
     let currentUser = null;
+    let currentChatId = null;
 
-    // ПЕРЕКЛАДИ ТЕКСТІВ
     const dict = {
-      ru: {
-        authTitle: "Вход / Авторизация", login: "Войти", reg: "Зарегистрироваться",
-        createTitle: "Создать объявление", pub: "Опубликовать", feedTitle: "Объявления рядом",
-        logout: "Выйти", buy: "Купить (Escrow)", pending: "Ожидает подтверждения"
-      },
-      uk: {
-        authTitle: "Вхід / Авторизація", login: "Увійти", reg: "Зареєструватися",
-        createTitle: "Створити оголошення", pub: "Опублікувати", feedTitle: "Оголошення поруч",
-        logout: "Вийти", buy: "Купити (Escrow)", pending: "Очікує підтвердження"
-      }
+      ru: { authTitle: "Вход / Авторизация", login: "Войти", reg: "Зарегистрироваться", createTitle: "Создать объявление", pub: "Опубликовать", feedTitle: "Объявления рядом", logout: "Выйти", buy: "Купить (Escrow)", chat: "Написать" },
+      uk: { authTitle: "Вхід / Авторизація", login: "Увійти", reg: "Зареєструватися", createTitle: "Створити оголошення", pub: "Опублікувати", feedTitle: "Оголошення поруч", logout: "Вийти", buy: "Купити (Escrow)", chat: "Написати" }
     };
 
     function toggleLang() {
       currentLang = currentLang === 'ru' ? 'uk' : 'ru';
-      updateUI();
       loadListings();
     }
 
-    function updateUI() {
-      const t = dict[currentLang];
-      document.getElementById('authTitle').innerText = t.authTitle;
-      document.getElementById('btnLoginBtn').innerText = t.login;
-      document.getElementById('btnRegBtn').innerText = t.reg;
-      document.getElementById('createTitle').innerText = t.createTitle;
-      document.getElementById('btnSubmitListing').innerText = t.pub;
-      document.getElementById('feedTitle').innerText = t.feedTitle;
-      document.getElementById('btnLogoutBtn').innerText = t.logout;
-    }
-
-    // АВТОРИЗАЦІЯ
     async function handleRegister() {
       const email = document.getElementById('authEmail').value;
       const password = document.getElementById('authPass').value;
       const fullName = document.getElementById('authName').value;
-
-      const { data, error } = await supabase.auth.signUp({
-        email, password, options: { data: { full_name: fullName } }
-      });
-      if (error) alert(error.message);
-      else alert("Регистрация успешна! / Реєстрація успішна!");
+      const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+      if (error) alert(error.message); else alert("Успешно!");
     }
 
     async function handleLogin() {
       const email = document.getElementById('authEmail').value;
       const password = document.getElementById('authPass').value;
-
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message);
-      else {
-        checkUser();
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) alert(error.message); else checkUser();
     }
 
     async function handleLogout() {
@@ -160,12 +150,9 @@
     async function checkUser() {
       const { data: { user } } = await supabase.auth.getUser();
       currentUser = user;
-
       if (user) {
         document.getElementById('authSection').classList.add('hidden');
         document.getElementById('profileSection').classList.remove('hidden');
-        
-        // Отримуємо профіль з балансом
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (profile) {
           document.getElementById('userBalance').innerText = profile.balance || 0;
@@ -177,88 +164,150 @@
       }
     }
 
-    // СТВОРЕННЯ ОГОЛОШЕННЯ
     async function submitListing() {
       if (!currentUser) return alert("Авторизуйтесь!");
-
       const listing = {
         user_id: currentUser.id,
         title_ru: document.getElementById('pTitleRu').value,
         title_uk: document.getElementById('pTitleUk').value || document.getElementById('pTitleRu').value,
         description_ru: document.getElementById('pDescRu').value,
         description_uk: document.getElementById('pDescUk').value || document.getElementById('pDescRu').value,
-        price: parseFloat(document.getElementById('pPrice').value),
-        category: document.getElementById('pCategory').value,
-        latitude: 50.45, // Дефолтні координати
-        longitude: 30.52
+        price: parseFloat(document.getElementById('pPrice').value)
       };
-
       const { error } = await supabase.from('listings').insert([listing]);
       if (error) alert(error.message);
-      else {
-        alert("Создано! / Створено!");
-        showTab('feed');
-        loadListings();
-      }
+      else { alert("Створено!"); showTab('feed'); loadListings(); }
     }
 
-    // ЗАВАНТАЖЕННЯ ОГОЛОШЕНЬ
     async function loadListings() {
       const container = document.getElementById('listingsContainer');
-      const { data, error } = await supabase.from('listings').select('*').eq('status', 'active');
-
-      if (error) { container.innerText = "Ошибка загрузки"; return; }
-      if (!data || data.length === 0) { container.innerText = "Нет объявлений"; return; }
+      const { data, error } = await supabase.from('listings').select('*');
+      if (error || !data) { container.innerText = "Ошибка"; return; }
 
       container.innerHTML = '';
       data.forEach(item => {
         const title = currentLang === 'uk' ? item.title_uk : item.title_ru;
         const desc = currentLang === 'uk' ? item.description_uk : item.description_ru;
-
         const el = document.createElement('div');
         el.className = 'card';
         el.innerHTML = `
           <h4>${title}</h4>
-          <p style="color:var(--subtext); font-size:14px; margin: 5px 0;">${desc}</p>
+          <p style="color:var(--subtext); font-size:14px; margin:5px 0;">${desc}</p>
           <div class="price">${item.price} UAH</div>
-          <button onclick="startDeal('${item.id}', '${item.user_id}', ${item.price})" style="margin-top:10px;">
-            ${dict[currentLang].buy}
-          </button>
+          <button onclick="openOrCreateChat('${item.id}', '${item.user_id}')" class="btn-alt">${dict[currentLang].chat}</button>
+          <button onclick="startDeal('${item.id}', '${item.user_id}', ${item.price})" style="margin-top:5px;">${dict[currentLang].buy}</button>
         `;
         container.appendChild(el);
       });
     }
 
-    // ІНІЦІАЦІЯ УГОДИ (ESCROW)
-    async function startDeal(listingId, sellerId, amount) {
+    // ЛОГІКА ЧАТУ
+    async function openOrCreateChat(listingId, sellerId) {
       if (!currentUser) return alert("Авторизуйтесь!");
-      
-      const { data, error } = await supabase.rpc('create_deal', {
-        p_listing_id: listingId,
-        p_seller_id: sellerId,
-        p_amount: amount
-      });
+      if (currentUser.id === sellerId) return alert("Це ваше оголошення!");
 
-      if (error) alert(error.message);
-      else {
-        alert("Сделка создана! Средства заморожены. / Угоду створено! Кошти заморожено.");
-        checkUser();
+      let { data: chat } = await supabase.from('chats')
+        .select('*')
+        .eq('listing_id', listingId)
+        .eq('buyer_id', currentUser.id)
+        .single();
+
+      if (!chat) {
+        const { data: newChat, error } = await supabase.from('chats')
+          .insert([{ listing_id: listingId, buyer_id: currentUser.id, seller_id: sellerId }])
+          .select().single();
+        if (error) return alert(error.message);
+        chat = newChat;
+      }
+
+      showTab('chats');
+      openChatView(chat.id);
+    }
+
+    async function loadUserChats() {
+      if (!currentUser) return;
+      const { data: chats } = await supabase.from('chats')
+        .select('*')
+        .or(`buyer_id.eq.${currentUser.id},seller_id.eq.${currentUser.id}`);
+
+      const container = document.getElementById('chatsContainer');
+      if (!chats || chats.length === 0) { container.innerText = "Чатов нет"; return; }
+
+      container.innerHTML = '';
+      chats.forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.style.cursor = 'pointer';
+        el.innerText = `Чат по товару ID: ${c.listing_id.slice(0, 8)}...`;
+        el.onclick = () => openChatView(c.id);
+        container.appendChild(el);
+      });
+    }
+
+    async function openChatView(chatId) {
+      currentChatId = chatId;
+      document.getElementById('chatList').classList.add('hidden');
+      document.getElementById('activeChat').classList.remove('hidden');
+      loadMessages();
+    }
+
+    function closeChat() {
+      currentChatId = null;
+      document.getElementById('activeChat').classList.add('hidden');
+      document.getElementById('chatList').classList.remove('hidden');
+    }
+
+    async function loadMessages() {
+      if (!currentChatId) return;
+      const { data: msgs } = await supabase.from('messages').select('*').eq('chat_id', currentChatId).order('created_at', { ascending: true });
+      const box = document.getElementById('messagesBox');
+      box.innerHTML = '';
+      if (msgs) {
+        msgs.forEach(m => {
+          const div = document.createElement('div');
+          div.className = `msg ${m.sender_id === currentUser.id ? 'msg-my' : 'msg-their'}`;
+          div.innerText = m.content;
+          box.appendChild(div);
+        });
+        box.scrollTop = box.scrollHeight;
       }
     }
 
-    // НАВІГАЦІЯ
+    async function sendMessage() {
+      const input = document.getElementById('msgInput');
+      const text = input.value.trim();
+      if (!text || !currentChatId) return;
+
+      await supabase.from('messages').insert([{ chat_id: currentChatId, sender_id: currentUser.id, content: text }]);
+      input.value = '';
+      loadMessages();
+    }
+
+    async function startDeal(listingId, sellerId, amount) {
+      if (!currentUser) return alert("Авторизуйтесь!");
+      const { error } = await supabase.rpc('create_deal', { p_listing_id: listingId, p_seller_id: sellerId, p_amount: amount });
+      if (error) alert(error.message);
+      else { alert("Угоду створено! Кошти заморожено."); checkUser(); }
+    }
+
     function showTab(tab) {
       document.getElementById('feedSection').classList.add('hidden');
       document.getElementById('createSection').classList.add('hidden');
-      
+      document.getElementById('chatsSection').classList.add('hidden');
+      document.getElementById('profileSection').classList.add('hidden');
+
       if (tab === 'feed') document.getElementById('feedSection').classList.remove('hidden');
       if (tab === 'create') document.getElementById('createSection').classList.remove('hidden');
+      if (tab === 'chats') {
+        document.getElementById('chatsSection').classList.remove('hidden');
+        loadUserChats();
+      }
+      if (tab === 'profile') document.getElementById('profileSection').classList.remove('hidden');
     }
 
-    // СТАРТ
     checkUser();
     loadListings();
-    updateUI();
+    setInterval(() => { if (currentChatId) loadMessages(); }, 3000); // Оновлення повідомлень кожні 3 секунди
   </script>
 </body>
 </html>
